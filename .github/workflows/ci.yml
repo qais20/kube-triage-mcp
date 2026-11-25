@@ -1,0 +1,40 @@
+name: ci
+on:
+  push: {branches: [main]}
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync
+      - run: uv run ruff check . && uv run ruff format --check .
+      - run: uv run pytest -q
+
+  e2e:
+    # A real cluster with a deliberately broken namespace. The server must diagnose
+    # every failure, redact the leaked password, refuse out-of-scope reads and
+    # refuse a replayed approval token.
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: helm/kind-action@v1
+        with: {cluster_name: triage-e2e}
+      - run: kubectl apply -f examples/broken-shop.yaml
+      - run: uv sync && uv run python scripts/e2e.py
+
+  image:
+    runs-on: ubuntu-latest
+    needs: e2e
+    if: github.ref == 'refs/heads/main'
+    permissions: {contents: read, packages: write}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with: {registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}"}
+      - uses: docker/build-push-action@v6
+        with: {push: true, tags: "ghcr.io/${{ github.repository }}:latest"}

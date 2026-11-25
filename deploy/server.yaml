@@ -1,0 +1,42 @@
+# In-cluster, streamable HTTP. Put it behind your ingress + TLS; the bearer token is the auth.
+#   kubectl create ns kube-triage
+#   kubectl -n kube-triage create secret generic kube-triage --from-literal=token=$(openssl rand -hex 32)
+#   kubectl apply -f deploy/
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: kube-triage, namespace: kube-triage}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: kube-triage}}
+  template:
+    metadata: {labels: {app: kube-triage}}
+    spec:
+      serviceAccountName: kube-triage
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: server
+          image: ghcr.io/qais20/kube-triage-mcp:latest
+          imagePullPolicy: IfNotPresent
+          args: ["--http", "--host", "0.0.0.0", "--port", "8080", "--audit-log", "/var/log/kube-triage/audit.jsonl"]
+          env:
+            - name: KUBE_TRIAGE_TOKEN
+              valueFrom: {secretKeyRef: {name: kube-triage, key: token}}
+            - {name: KUBE_TRIAGE_NAMESPACES, value: "demo-shop"}
+          ports: [{containerPort: 8080}]
+          readinessProbe: {httpGet: {path: /healthz, port: 8080}}
+          resources: {requests: {cpu: 50m, memory: 96Mi}, limits: {memory: 256Mi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true,
+                            capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: audit, mountPath: /var/log/kube-triage}
+            - {name: home, mountPath: /home/app}
+      volumes:
+        - {name: audit, emptyDir: {}}
+        - {name: home, emptyDir: {}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: kube-triage, namespace: kube-triage}
+spec:
+  selector: {app: kube-triage}
+  ports: [{port: 80, targetPort: 8080}]
