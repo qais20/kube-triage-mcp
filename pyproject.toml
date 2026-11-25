@@ -1,0 +1,38 @@
+[project]
+name = "kube-triage-mcp"
+version = "0.1.0"
+description = "Kubernetes incident triage for AI agents, over MCP. Read-only by default; every change is propose, human approves, execute."
+readme = "README.md"
+authors = [
+    { name = "Qais Navaei" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "kubernetes>=37.0.3",
+    "mcp[cli]>=2.3.0",
+]
+
+license = "MIT"
+keywords = ["mcp", "kubernetes", "sre", "incident-response", "claude"]
+
+[project.scripts]
+kube-triage-mcp = "kube_triage_mcp.__main__:main"
+
+[build-system]
+requires = ["uv_build>=0.13.10,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.6",
+]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
